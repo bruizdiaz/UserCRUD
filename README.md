@@ -165,7 +165,7 @@ Actualiza un usuario existente.
 
 ## ✒️ Autor
 
--   **B. Diaz** - [bruizdiaz](https://github.com/bruizdiaz)
+-   **Mateo B. Ruiz Diaz** - [bruizdiaz](https://github.com/bruizdiaz)
 
 ## 📄 Licencia
 
