@@ -1,6 +1,5 @@
 import User from '../models/user.models.js';
 import dotenv from 'dotenv';
-import bcrypt from 'bcrypt';
 import {
 	validatePassword,
 	validateEmail,
