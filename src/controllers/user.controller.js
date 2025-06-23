@@ -1,9 +1,16 @@
 import User from '../models/user.models.js';
 import dotenv from 'dotenv';
 import bcrypt from 'bcrypt';
+import {
+	validatePassword,
+	validateEmail,
+	validateName,
+	hashPassword,
+} from '../validators/users.validator.js';
 
 dotenv.config();
 
+// Obtener todos los usuarios
 export const getAllUsers = async (req, res) => {
 	try {
 		const users = await User.findAll({
@@ -15,10 +22,12 @@ export const getAllUsers = async (req, res) => {
 	}
 };
 
+// Obtener un usuario por ID
 export const getUserByID = async (req, res) => {
 	res.json(req.user);
 };
 
+// Crear un nuevo usuario
 export const createUser = async (req, res) => {
 	try {
 		const { password } = req.body;
@@ -26,63 +35,38 @@ export const createUser = async (req, res) => {
 		const email = (req.body.email || '').trim();
 		const errors = [];
 
-		if (!name || !email || !password) {
-			errors.push({
-				message: 'Nombre, email y contraseña son requeridas',
-			});
-		}
+		if (!name || !email || !password)
+			errors.push({ message: 'Nombre, email y contraseña son requeridos' });
 
-		const nameRegex = /^[a-zA-Z\s]{2,50}$/;
-		if (!nameRegex.test(name)) {
+		if (!validateName(name))
 			errors.push({
 				message: 'Nombre inválido. Solo letras y espacios, mínimo 2 caracteres.',
 			});
-		}
 
-		if (name.length > 50) {
-			errors.push({
-				message: 'El nombre es demasiado largo (max. 50 caracteres).',
-			});
-		}
+		if (name.length > 50)
+			errors.push({ message: 'El nombre es demasiado largo (max. 50 caracteres).' });
 
-		if (email.length > 100) {
-			errors.push({
-				message: 'El email es demasiado largo (max. 100 caracteres).',
-			});
-		}
+		if (email.length > 100)
+			errors.push({ message: 'El email es demasiado largo (max. 100 caracteres).' });
 
-		if (password === name || password === email) {
+		if (!validateEmail(email)) errors.push({ message: 'Email invalido.' });
+
+		if (password === name || password === email)
 			errors.push({ message: 'La contraseña no puede ser igual al nombre o email.' });
-		}
 
-		const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
-		if (!passwordRegex.test(password)) {
+		if (!validatePassword(password))
 			errors.push({
 				message:
 					'La contraseña debe tener al menos 8 caracteres, incluyendo mayúsculas, minúsculas, números y símbolos.',
 			});
-		}
 
-		const emailRegex = /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/;
-		if (email === '' || !emailRegex.test(email)) {
-			errors.push({
-				message: 'Email invalido.',
-			});
-		}
+		if (errors.length > 0) return res.status(400).json({ errors });
 
 		const existingUser = await User.findOne({ where: { email: email } });
-		if (existingUser) {
-			// No uses un array aquí, ya que es un error que detiene todo.
+		if (existingUser)
 			return res.status(400).json({ message: 'El email ya se encuentra registrado.' });
-		}
 
-		if (errors.length > 0) {
-			return res.status(400).json({ errors });
-		}
-
-		//PASSWORD HASH
-		const saltRounds = Number(process.env.SALT_ROUNDS);
-		const hashedPassword = await bcrypt.hash(password, saltRounds);
+		const hashedPassword = await hashPassword(password);
 
 		const newUser = {
 			name: name,
@@ -101,12 +85,18 @@ export const createUser = async (req, res) => {
 	}
 };
 
+// Actualizar usuario
 export const updateUser = async (req, res) => {
 	try {
 		const { name, email, password } = req.body;
 		const user = req.user;
 
 		if (email && email !== user.email) {
+			if (!validateEmail(email)) {
+				return res
+					.status(400)
+					.json({ message: 'El formato del nuevo email es inválido.' });
+			}
 			const existingUser = await User.findOne({ where: { email: email } });
 			if (existingUser && existingUser.id !== user.id) {
 				return res
@@ -117,17 +107,22 @@ export const updateUser = async (req, res) => {
 		}
 
 		if (password) {
-			const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
-			if (!passwordRegex.test(password)) {
+			if (!validatePassword(password)) {
 				return res.status(400).json({
 					message: 'La nueva contraseña no cumple los requisitos de seguridad.',
 				});
 			}
-			const saltRounds = Number(process.env.SALT_ROUNDS);
-			user.password = await bcrypt.hash(password, saltRounds);
+			user.password = await hashPassword(password);
 		}
 
-		user.name = name || user.name;
+		if (name) {
+			if (!validateName(name)) {
+				return res
+					.status(400)
+					.json({ message: 'El nuevo nombre tiene un formato inválido.' });
+			}
+			user.name = name;
+		}
 
 		await user.save();
 		res.json({ message: `Usuario ${user.id} actualizado correctamente.` });
@@ -136,6 +131,7 @@ export const updateUser = async (req, res) => {
 	}
 };
 
+// Eliminar usuario
 export const deleteUser = async (req, res) => {
 	try {
 		await req.user.destroy();
